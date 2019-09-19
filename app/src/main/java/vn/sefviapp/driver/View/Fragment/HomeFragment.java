@@ -14,6 +14,7 @@ import android.os.Build;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
@@ -31,6 +32,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ToggleButton;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
@@ -51,6 +54,7 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 
+import java.text.DateFormat;
 import java.util.List;
 
 import vn.sefviapp.driver.BuildConfig;
@@ -59,7 +63,7 @@ import vn.sefviapp.driver.R;
 import vn.sefviapp.driver.View.Activity.MapsActivity;
 
 
-public class HomeFragment extends Fragment implements OnMapReadyCallback, ValueEventListener {
+public class HomeFragment extends Fragment implements OnMapReadyCallback, ValueEventListener, com.google.android.gms.location.LocationListener, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
 
     MapFragment homeFragment;
     ToggleButton toggelStatus;
@@ -72,22 +76,16 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, ValueE
     DatabaseReference databaseReference;
 
     GoogleMap mGoogleMap;
-    SupportMapFragment mapFrag;
-    LocationRequest mLocationRequest;
-    Location mLastLocation;
-    Marker mCurrLocationMarker;
-    FusedLocationProviderClient mFusedLocationClient;
-    ValueEventListener valueEventListener;
     Location location1;
     String userid;
-    boolean isToggel;
 
-    public static final int MY_PERMISSIONS_REQUEST_LOCATION = 99;
+
+    GoogleApiClient mGoogleApiClient;
+    LocationRequest mLocationRequest;
+    static final int MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(getActivity());
-
     }
 
     @RequiresApi(api = Build.VERSION_CODES.M)
@@ -110,7 +108,6 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, ValueE
 
     private void addEvents() {
         toggelStatus.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 isCheck(isChecked, driver);
@@ -124,6 +121,17 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, ValueE
         rateAll = v.findViewById(R.id.rateAll);
         SharedPreferences pref = getActivity().getApplicationContext().getSharedPreferences("MyPref", 0);
         userid = pref.getString("userNameLogin", null);
+
+        mLocationRequest = new LocationRequest();
+        mLocationRequest.setInterval(5000);
+        mLocationRequest.setFastestInterval(5000);
+        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        mGoogleApiClient = new GoogleApiClient.Builder(getActivity())
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .addApi(LocationServices.API)
+                .build();
+
         getDataDriver();
     }
 
@@ -136,112 +144,6 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, ValueE
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mGoogleMap = googleMap;
-        maps();
-
-    }
-    LocationCallback mLocationCallback = new LocationCallback() {
-        @Override
-        public void onLocationResult(LocationResult locationResult) {
-            List<Location> locationList = locationResult.getLocations();
-            if (locationList.size() > 0) {
-                Location location = locationList.get(locationList.size() - 1);
-                location1 = new Location("");
-                location1.setLatitude(location.getLatitude());
-                location1.setLongitude(location.getLongitude());
-
-                Log.i("aaa", "Vị trí: " + location.getLatitude() + " " + location.getLongitude());
-                mLastLocation = location;
-                if (mCurrLocationMarker != null) {
-                    mCurrLocationMarker.remove();
-                }
-
-                LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
-                MarkerOptions markerOptions = new MarkerOptions();
-                markerOptions.position(latLng);
-                markerOptions.title("Vị trí hiện tại");
-                markerOptions.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA));
-                mCurrLocationMarker = mGoogleMap.addMarker(markerOptions);
-
-                mGoogleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, 15));
-            }
-        }
-    };
-    public void maps(){
-        mGoogleMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
-        mLocationRequest = new LocationRequest();
-        mLocationRequest.setInterval(120000);
-        mLocationRequest.setFastestInterval(120000);
-        mLocationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
-        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (ContextCompat.checkSelfPermission(getContext(),
-                    Manifest.permission.ACCESS_FINE_LOCATION)
-                    == PackageManager.PERMISSION_GRANTED) {
-                mFusedLocationClient.requestLocationUpdates(mLocationRequest, mLocationCallback, Looper.myLooper());
-                mGoogleMap.setMyLocationEnabled(true);
-            } else {
-                checkLocationPermission();
-            }
-        }
-        else {
-            try {
-                mFusedLocationClient.requestLocationUpdates(mLocationRequest, mLocationCallback, Looper.myLooper());
-                mGoogleMap.setMyLocationEnabled(true);
-            }catch (Exception e){
-
-            }
-        }
-    }
-    private void checkLocationPermission() {
-        if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) {
-            if (ActivityCompat.shouldShowRequestPermissionRationale(getActivity(),
-                    Manifest.permission.ACCESS_FINE_LOCATION)) {
-
-                new AlertDialog.Builder(getContext())
-                        .setTitle("Xin quyền vị trí")
-                        .setMessage("Ứng dụng này cần sự cho phép của Địa điểm, vui lòng chấp nhận sử dụng chức năng vị trí")
-                        .setPositiveButton("Cho phép", new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialogInterface, int i) {
-                                ActivityCompat.requestPermissions(getActivity(),
-                                        new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                                        MY_PERMISSIONS_REQUEST_LOCATION );
-                            }
-                        })
-                        .create()
-                        .show();
-
-
-            } else {
-
-                ActivityCompat.requestPermissions(getActivity(),
-                        new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                        MY_PERMISSIONS_REQUEST_LOCATION );
-            }
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode,
-                                           String permissions[], int[] grantResults) {
-        switch (requestCode) {
-            case MY_PERMISSIONS_REQUEST_LOCATION: {
-                if (grantResults.length > 0
-                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    if (ContextCompat.checkSelfPermission(getContext(),
-                            Manifest.permission.ACCESS_FINE_LOCATION)
-                            == PackageManager.PERMISSION_GRANTED) {
-
-                        mFusedLocationClient.requestLocationUpdates(mLocationRequest, mLocationCallback, Looper.myLooper());
-                        mGoogleMap.setMyLocationEnabled(true);
-                    }
-
-                } else {
-                    Toast.makeText(getContext(), "Không cho phép", Toast.LENGTH_LONG).show();
-                }
-                return;
-            }
-        }
     }
 
 
@@ -272,15 +174,99 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, ValueE
         databaseReference.setValue(driver);
     }
 
-    public void setLocationChane(Driver driver){
-        if (location1.getLatitude() != driver.getLatitude() || location1.getLongitude() != driver.getLongitude()){
-            driver.setLongitude(location1.getLongitude());
-            driver.setLatitude(location1.getLatitude());
-        }else {
-            driver.setLongitude(location1.getLongitude());
-            driver.setLatitude(location1.getLatitude());
-        }
-        databaseReference.setValue(driver);
+    @Override
+    public void onStart() {
+        mGoogleApiClient.connect();
+        super.onStart();
     }
 
+    @Override
+    public void onStop() {
+        mGoogleApiClient.disconnect();
+        super.onStop();
+    }
+
+    @Override
+    public void onLocationChanged(Location location) {
+        if (location != null) {
+            location1 = new Location("");
+            location1.setLatitude(location.getLatitude());
+            location1.setLongitude(location.getLongitude());
+            mGoogleMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
+            mGoogleMap.setMyLocationEnabled(true);
+
+            new Handler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    driver.setLongitude(location1.getLongitude());
+                    driver.setLatitude(location1.getLatitude());
+                    databaseReference.setValue(driver);
+                }
+            }, 2000);
+        }
+    }
+
+
+
+    @Override
+    public void onConnected(@Nullable Bundle bundle) {
+        if (ActivityCompat.checkSelfPermission(getActivity(),
+                Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED
+                && ActivityCompat.checkSelfPermission(getActivity(),
+                Manifest.permission.ACCESS_COARSE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(getActivity(),
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                    MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
+
+            return;
+        }
+        LocationServices.FusedLocationApi.requestLocationUpdates(
+                mGoogleApiClient, mLocationRequest, this);
+//        LocationServices.FusedLocationApi.requestLocationUpdates(
+//                mGoogleApiClient, mLocationRequest, (com.google.android.gms.location.LocationListener) this);
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+
+    }
+
+    @Override
+    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+        Toast.makeText(getActivity(),
+                "onConnectionFailed: \n" + connectionResult.toString(),
+                Toast.LENGTH_LONG).show();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(
+            int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        switch (requestCode) {
+            case MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    Toast.makeText(getActivity(),
+                            "permission was granted, :)",
+                            Toast.LENGTH_LONG).show();
+
+                    try {
+                        LocationServices.FusedLocationApi.requestLocationUpdates(
+                                mGoogleApiClient, mLocationRequest, (com.google.android.gms.location.LocationListener) this);
+                    } catch (SecurityException e) {
+                        Toast.makeText(getActivity(),
+                                "SecurityException:\n" + e.toString(),
+                                Toast.LENGTH_LONG).show();
+                    }
+                } else {
+                    Toast.makeText(getActivity(),
+                            "permission denied, ...:(",
+                            Toast.LENGTH_LONG).show();
+                }
+                return;
+            }
+        }
+    }
 }
