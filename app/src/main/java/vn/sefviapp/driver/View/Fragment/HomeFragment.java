@@ -155,8 +155,12 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, ValueE
     @Override
     public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
         driver = dataSnapshot.getValue(Driver.class);
-        driver.setLongitude(location1.getLongitude());
-        driver.setLatitude(location1.getLatitude());
+        try {
+            driver.setLongitude(location1.getLongitude());
+            driver.setLatitude(location1.getLatitude());
+        }catch (Exception e){
+
+        }
         rateAll.setText(driver.getRate()+"");
         toggelStatus.setChecked(driver.isStatus());
         databaseReference.setValue(driver);
@@ -198,9 +202,13 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, ValueE
             new Handler().postDelayed(new Runnable() {
                 @Override
                 public void run() {
-                    driver.setLongitude(location1.getLongitude());
-                    driver.setLatitude(location1.getLatitude());
-                    databaseReference.setValue(driver);
+                   try {
+                       driver.setLongitude(location1.getLongitude());
+                       driver.setLatitude(location1.getLatitude());
+                       databaseReference.setValue(driver);
+                   }catch (Exception e){
+
+                   }
                 }
             }, 2000);
         }
